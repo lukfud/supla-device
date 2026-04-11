@@ -75,6 +75,33 @@ uint8_t digitalPinToInterrupt(uint8_t pin) {
 
 namespace Supla {
 namespace Io {
+namespace {
+constexpr size_t DefaultIoPwmCacheSize = 256;  // Codex[2026-04-11]
+uint8_t defaultIoAnalogResolutionBits[DefaultIoPwmCacheSize] = {};
+// Codex[2026-04-11]
+
+bool isDefaultIoPinCached(uint8_t pin) {  // Codex[2026-04-11]
+  return pin < DefaultIoPwmCacheSize;
+}
+
+void cacheDefaultIoAnalogResolutionBits(uint8_t pin,
+                                        uint8_t resolutionBits) {
+  // Codex[2026-04-11]
+  if (isDefaultIoPinCached(pin)) {
+    defaultIoAnalogResolutionBits[pin] = resolutionBits;
+    // Codex[2026-04-11]
+  }
+}
+
+uint8_t getCachedDefaultIoAnalogResolutionBits(uint8_t pin) {
+  // Codex[2026-04-11]
+  if (isDefaultIoPinCached(pin)) {
+    return defaultIoAnalogResolutionBits[pin];
+  }
+  return 0;
+}
+}  // namespace
+
 void IoPin::configureAnalogOutput(int channelNumber) const {
   if (!isSet()) {
     return;
@@ -104,7 +131,9 @@ void IoPin::setAnalogOutputResolutionBits(uint8_t resolutionBits) {
     return;
   }
 
-  analogWriteResolutionBitsValue = resolutionBits;
+  analogWriteResolutionBitsValue = resolutionBits;  // Codex[2026-04-11]
+  cacheDefaultIoAnalogResolutionBits(static_cast<uint8_t>(pin),
+                                     resolutionBits);  // Codex[2026-04-11]
 
 #ifdef ARDUINO_ARCH_ESP32
   analogWriteResolution(static_cast<uint8_t>(pin), resolutionBits);
@@ -182,7 +211,10 @@ uint8_t IoPin::analogWriteResolutionBits() const {
   if (io != nullptr) {
     return io->customAnalogWriteResolutionBits();
   }
-  return 0;
+  return isSet()
+             ? getCachedDefaultIoAnalogResolutionBits(static_cast<uint8_t>(pin))
+             // Codex[2026-04-11]
+                 : 0;
 }
 
 uint32_t IoPin::analogWriteMaxValue() const {

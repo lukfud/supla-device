@@ -23,6 +23,28 @@
 namespace Supla {
 namespace Control {
 
+namespace {
+constexpr uint8_t LegacyAnalogWriteResolutionBits = 10;
+constexpr uint32_t LegacyAnalogWriteFrequencyHz = 1000;
+
+void ConfigureLegacyAnalogOutput(Supla::Io::IoPin &pin) {
+  if (pin.io == nullptr) {
+    pin.setAnalogOutputResolutionBits(LegacyAnalogWriteResolutionBits);
+    pin.setAnalogOutputFrequency(LegacyAnalogWriteFrequencyHz);
+  }
+}  // Codex[2026-04-11]
+
+bool IsSameDefaultIoPin(const Supla::Io::IoPin &a, const Supla::Io::IoPin &b) {
+  return a.io == nullptr && b.io == nullptr && a.isSet() && b.isSet() &&
+         a.getPin() == b.getPin();  // Codex[2026-04-11]
+}
+
+bool IsSameCustomIo(const Supla::Io::IoPin &a, const Supla::Io::IoPin &b) {
+  return a.io != nullptr && b.io != nullptr &&
+         a.io == b.io;  // Codex[2026-04-11]
+}
+}  // namespace
+
 LightingPwmLeds::LightingPwmLeds(
     LightingPwmLeds *parent, int out1, int out2, int out3, int out4, int out5)
     : LightingPwmBase(parent), parentPwm(parent) {
@@ -154,21 +176,28 @@ void LightingPwmLeds::setRGBCCTValueOnDevice(uint32_t output[5],
 
 void LightingPwmLeds::applyPwmFrequencyToOutputs() {
   const uint16_t frequency = getPwmFrequency();
-  Supla::Io::Base *configuredIo[kMaxOutputs] = {};
-  int configuredIoCount = 0;
+  Supla::Io::IoPin configuredOutputs[kMaxOutputs] = {};  // Codex[2026-04-11]
+  int configuredCount = 0;  // Codex[2026-04-11]
+
   for (auto &output : outputs) {
-    if (output.pin.io != nullptr) {
-      bool alreadyConfigured = false;
-      for (int i = 0; i < configuredIoCount; i++) {
-        if (configuredIo[i] == output.pin.io) {
-          alreadyConfigured = true;
-          break;
-        }
+    if (!output.pin.isSet()) {  // Codex[2026-04-11]
+      continue;
+    }
+
+    bool alreadyConfigured = false;
+    for (int i = 0; i < configuredCount; i++) {
+      if (IsSameCustomIo(output.pin, configuredOutputs[i]) ||
+          IsSameDefaultIoPin(output.pin, configuredOutputs[i])) {
+        alreadyConfigured = true;
+        break;
       }
-      if (!alreadyConfigured) {
-        configuredIo[configuredIoCount++] = output.pin.io;
-        output.pin.setAnalogOutputFrequency(frequency);
-      }
+    }
+
+    if (!alreadyConfigured) {
+      configuredOutputs[configuredCount++] = output.pin;
+      // Codex[2026-04-11]
+      output.pin.setAnalogOutputFrequency(frequency);
+      // Codex[2026-04-11]
     }
   }
 }
@@ -196,14 +225,16 @@ void LightingPwmLeds::onInit() {
 
   if (hasParent()) {
     SUPLA_LOG_DEBUG("Light[%d]: initialize parent PWM", getChannelNumber());
-    parentPwm->onInit();
-    LightingPwmBase::onInit();
-    return;
+    parentPwm->onInit();  // Codex[2026-04-11]
   }
 
   applyPwmFrequencyToOutputs();
 
   for (auto &output : outputs) {
+    if (!output.pin.isSet()) {  // Codex[2026-04-11]
+      continue;
+    }
+    ConfigureLegacyAnalogOutput(output.pin);  // Codex[2026-04-11]
     output.pin.configureAnalogOutput();
     output.pin.pinMode();
   }
