@@ -333,7 +333,8 @@ void Supla::messageReceived(void *srpc,
           result.Result = suplaSrpc->getSdc()->handleCalcfgFromServer(
               rd.data.sd_device_calcfg_request, &result);
           if ((result.Command == SUPLA_CALCFG_CMD_START_SUBDEVICE_PAIRING ||
-               result.Command == SUPLA_CALCFG_CMD_CHECK_FIRMWARE_UPDATE) &&
+               (result.Command == SUPLA_CALCFG_CMD_CHECK_FIRMWARE_UPDATE &&
+                result.DataSize == 0)) &&
               result.Result == SUPLA_CALCFG_RESULT_TRUE) {
             suplaSrpc->calCfgResultPending.set(
                 result.ChannelNumber, result.ReceiverID, result.Command);

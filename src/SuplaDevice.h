@@ -88,6 +88,12 @@ enum class SwUpdateMode : uint8_t {
   RetryCheckAndUpdate,
 };
 
+// Custom hook for sketches that want to handle firmware update requests
+// without relying on the built-in SwUpdate implementation.
+using FirmwareUpdateRequestHandler = bool (*)(SwUpdateMode mode,
+                                              int securityOnly);
+using FirmwareCheckRequestHandler = bool (*)(TCalCfg_FirmwareCheckResult *result);
+
 /**
  * @enum InitialMode
  */
@@ -394,6 +400,10 @@ class SuplaDeviceClass : public Supla::ActionHandler,
    * @param value true to enable, false to disable
    */
   void setAutomaticFirmwareUpdateSupported(bool value);
+  void setFirmwareUpdateRequestHandler(
+      Supla::FirmwareUpdateRequestHandler handler);
+  void setFirmwareCheckRequestHandler(
+      Supla::FirmwareCheckRequestHandler handler);
 
   /**
    * Triggers "identify" action on status LED
@@ -518,6 +528,8 @@ class SuplaDeviceClass : public Supla::ActionHandler,
   const uint8_t *rsaPublicKey = nullptr;
   char *customHostnamePrefix = nullptr;
   _impl_arduino_status impl_arduino_status = nullptr;
+  Supla::FirmwareCheckRequestHandler firmwareCheckRequestHandler = nullptr;
+  Supla::FirmwareUpdateRequestHandler firmwareUpdateRequestHandler = nullptr;
 };
 
 extern SuplaDeviceClass SuplaDevice;

@@ -1185,6 +1185,17 @@ int SuplaDeviceClass::handleCalcfgFromServer(TSD_DeviceCalCfgRequest *request,
             break;
           }
         }
+        // Custom sketch hook: allow external OTA implementation to provide
+        // the firmware check result directly to Cloud.
+        if (firmwareCheckRequestHandler && result) {
+          TCalCfg_FirmwareCheckResult fwResult = {};
+          if (firmwareCheckRequestHandler(&fwResult)) {
+            result->DataSize = sizeof(fwResult);
+            memcpy(result->Data, &fwResult, sizeof(fwResult));
+            SUPLA_LOG_INFO("Firmware update check handled by custom handler");
+            return SUPLA_CALCFG_RESULT_TRUE;
+          }
+        }
         // only check firmware for all updates
         initSwUpdateInstance(Supla::SwUpdateMode::OnlyCheck, 0);
         if (swUpdate) {
@@ -1220,6 +1231,15 @@ int SuplaDeviceClass::handleCalcfgFromServer(TSD_DeviceCalCfgRequest *request,
           case Supla::AutoUpdatePolicy::AllUpdates: {
             break;
           }
+        }
+
+        // Custom sketch hook: allow external OTA implementation to handle
+        // the Cloud-triggered firmware update request.
+        if (firmwareUpdateRequestHandler &&
+            firmwareUpdateRequestHandler(Supla::SwUpdateMode::CheckAndUpdate,
+                                         0)) {
+          SUPLA_LOG_INFO("Firmware update delegated to custom handler");
+          return SUPLA_CALCFG_RESULT_TRUE;
         }
 
         if (initSwUpdateInstance(Supla::SwUpdateMode::CheckAndUpdate, 0)) {
@@ -1867,6 +1887,18 @@ void SuplaDeviceClass::setAutomaticFirmwareUpdateSupported(bool value) {
   } else {
     removeFlags(SUPLA_DEVICE_FLAG_AUTOMATIC_FIRMWARE_UPDATE_SUPPORTED);
   }
+}
+
+void SuplaDeviceClass::setFirmwareUpdateRequestHandler(
+    Supla::FirmwareUpdateRequestHandler handler) {
+  // Custom sketch hook for Cloud-triggered firmware updates.
+  firmwareUpdateRequestHandler = handler;
+}
+
+void SuplaDeviceClass::setFirmwareCheckRequestHandler(
+    Supla::FirmwareCheckRequestHandler handler) {
+  // Custom sketch hook for Cloud-triggered firmware checks.
+  firmwareCheckRequestHandler = handler;
 }
 
 void SuplaDeviceClass::identifyStatusLed() {
